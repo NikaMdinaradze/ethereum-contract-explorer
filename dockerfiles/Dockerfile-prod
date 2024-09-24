@@ -1,0 +1,22 @@
+FROM python:3.11
+
+ENV PYTHONUNBUFFERED 1
+
+RUN mkdir -p /opt/app
+WORKDIR /opt/app
+
+COPY requirements.txt /opt/app/
+
+RUN pip install --upgrade pip && pip install -r requirements.txt --no-cache-dir
+
+COPY . /opt/app/
+
+RUN useradd -ms /bin/bash web3
+RUN chown -R web3:web3 /opt/app
+
+ADD scripts/docker-entrypoint-prod.sh /home/web3/docker-entrypoint-prod.sh
+
+RUN chmod +x /home/web3/docker-entrypoint-prod.sh
+USER web3
+
+ENTRYPOINT ["/home/web3/docker-entrypoint-prod.sh"]
