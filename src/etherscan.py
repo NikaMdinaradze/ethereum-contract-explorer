@@ -23,9 +23,35 @@ def get_deployer_contract(contract_address: str) -> str:
         )
 
     result = response.json().get("result")
-    if not result:
-        deployer_address = None
-    else:
-        deployer_address = result[0].get("contractCreator")
+    deployer_address = None if not result else result[0].get("contractCreator")
     return deployer_address
 
+
+def get_contracts_by_deployer(
+    deployer_address: str, start_block: int = 0, end_block: int = 99999999
+) -> list:
+    params = {
+        "module": "account",
+        "action": "txlist",
+        "address": deployer_address,
+        "startblock": start_block,
+        "endblock": end_block,
+        "sort": "asc",
+        "apikey": ETHERSCAN_API_KEY,
+    }
+
+    response = requests.get(ETHERSCAN_API_URL, params=params)
+
+    if not response.status_code == 200:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to fetch data from Etherscan: {response.status_code}",
+        )
+
+    result = response.json().get("result")
+
+    deployed_contracts = [
+        tx.get("contractAddress") for tx in result if tx.get("contractAddress") != ""
+    ]
+
+    return deployed_contracts
