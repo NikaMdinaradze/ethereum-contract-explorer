@@ -55,3 +55,41 @@ def get_contracts_by_deployer(
     ]
 
     return deployed_contracts
+
+
+def get_top_interactors(
+    contract_address: str, start_block: int = 0, end_block: int = 99999999
+) -> dict:
+    params = {
+        "module": "account",
+        "action": "txlist",
+        "address": contract_address,
+        "startblock": start_block,
+        "endblock": end_block,
+        "sort": "asc",
+        "apikey": ETHERSCAN_API_KEY,
+    }
+
+    response = requests.get(ETHERSCAN_API_URL, params=params)
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to fetch data from Etherscan: {response.status_code}",
+        )
+
+    result = response.json().get("result")
+
+    interactions = {}
+
+    for tx in result:
+        from_address = tx.get("from")
+        if from_address:
+            if from_address in interactions:
+                interactions[from_address] += 1
+            else:
+                interactions[from_address] = 1
+
+    sorted_interactions = sorted(interactions.items(), key=lambda x: x[1], reverse=True)
+
+    return dict(sorted_interactions)
