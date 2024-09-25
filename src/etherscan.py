@@ -3,93 +3,66 @@ import os
 import requests
 from fastapi import HTTPException, status
 
-ETHERSCAN_API_KEY = os.environ.get("ETHERSCAN_API_KEY")
-ETHERSCAN_API_URL = "https://api.etherscan.io/api"
 
+class ContractScanner:
+    ETHERSCAN_API_URL = "https://api.etherscan.io/api"
 
-def get_deployer_contract(contract_address: str) -> str:
-    params = {
-        "module": "contract",
-        "action": "getcontractcreation",
-        "contractaddresses": contract_address,
-        "apikey": ETHERSCAN_API_KEY,
-    }
-    response = requests.get(ETHERSCAN_API_URL, params=params)
+    def __init__(self, contract_address: str, api_key: str = None):
+        self.contract_address = contract_address
+        self.api_key = api_key if api_key else os.environ.get("ETHERSCAN_API_KEY")
 
-    if not response.status_code == 200:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to fetch data from Etherscan: {response.status_code}",
-        )
+    def _make_request(self, params: dict) -> dict:
+        response = requests.get(self.ETHERSCAN_API_URL, params=params)
+        if response.status_code != 200:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Failed to fetch data from Etherscan: {response.status_code}",
+            )
+        return response.json()
 
-    result = response.json().get("result")
-    deployer_address = None if not result else result[0].get("contractCreator")
-    return deployer_address
+    def get_deployer_address(self) -> str:
+        params = {
+            "module": "contract",
+            "action": "getcontractcreation",
+            "contractaddresses": self.contract_address,
+            "apikey": self.api_key,
+        }
+        result = self._make_request(params).get("result")
+        return result[0].get("contractCreator") if result else None
 
+    def get_other_deployments(
+        self, start_block: int = 0, end_block: int = 99999999
+    ) -> list:
+        params = {
+            "module": "account",
+            "action": "txlist",
+            "address": self.get_deployer_address(),
+            "startblock": start_block,
+            "endblock": end_block,
+            "sort": "asc",
+            "apikey": self.api_key,
+        }
+        result = self._make_request(params).get("result")
+        return [tx.get("contractAddress") for tx in result if tx.get("contractAddress")]
 
-def get_contracts_by_deployer(
-    deployer_address: str, start_block: int = 0, end_block: int = 99999999
-) -> list:
-    params = {
-        "module": "account",
-        "action": "txlist",
-        "address": deployer_address,
-        "startblock": start_block,
-        "endblock": end_block,
-        "sort": "asc",
-        "apikey": ETHERSCAN_API_KEY,
-    }
+    def get_top_interactors(
+        self, start_block: int = 0, end_block: int = 99999999
+    ) -> dict:
+        params = {
+            "module": "account",
+            "action": "txlist",
+            "address": self.contract_address,
+            "startblock": start_block,
+            "endblock": end_block,
+            "sort": "asc",
+            "apikey": self.api_key,
+        }
+        result = self._make_request(params).get("result")
 
-    response = requests.get(ETHERSCAN_API_URL, params=params)
+        interactions = {}
+        for tx in result:
+            from_address = tx.get("from")
+            if from_address:
+                interactions[from_address] = interactions.get(from_address, 0) + 1
 
-    if not response.status_code == 200:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to fetch data from Etherscan: {response.status_code}",
-        )
-
-    result = response.json().get("result")
-
-    deployed_contracts = [
-        tx.get("contractAddress") for tx in result if tx.get("contractAddress") != ""
-    ]
-
-    return deployed_contracts
-
-
-def get_top_interactors(
-    contract_address: str, start_block: int = 0, end_block: int = 99999999
-) -> dict:
-    params = {
-        "module": "account",
-        "action": "txlist",
-        "address": contract_address,
-        "startblock": start_block,
-        "endblock": end_block,
-        "sort": "asc",
-        "apikey": ETHERSCAN_API_KEY,
-    }
-
-    response = requests.get(ETHERSCAN_API_URL, params=params)
-
-    if response.status_code != 200:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to fetch data from Etherscan: {response.status_code}",
-        )
-
-    result = response.json().get("result")
-
-    interactions = {}
-
-    for tx in result:
-        from_address = tx.get("from")
-        if from_address:
-            if from_address in interactions:
-                interactions[from_address] += 1
-            else:
-                interactions[from_address] = 1
-
-    sorted_interactions = sorted(interactions.items(), key=lambda x: x[1], reverse=True)
-
-    return dict(sorted_interactions)
+        return dict(sorted(interactions.items(), key=lambda x: x[1], reverse=True))
