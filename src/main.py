@@ -10,6 +10,9 @@ app = FastAPI()
 
 @app.get("/search-contract")
 async def search_contract(contract_address: Annotated[EthereumAddressModel, Query()]):
+    """
+    Endpoint to search for contract information based on the given contract address.
+    """
     contract = ContractScanner(contract_address.contract_address)
     return {
         "contract_address": contract_address.contract_address,
