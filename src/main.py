@@ -3,12 +3,12 @@ from typing import Annotated
 from fastapi import FastAPI, Query
 
 from src.etherscan import ContractScanner
-from src.models import EthereumAddressModel
+from src.models import ContractInfoResponse, EthereumAddressModel
 
 app = FastAPI()
 
 
-@app.get("/search-contract")
+@app.get("/search-contract", response_model=ContractInfoResponse)
 async def search_contract(contract_address: Annotated[EthereumAddressModel, Query()]):
     """
     Endpoint to search for contract information based on the given contract address.

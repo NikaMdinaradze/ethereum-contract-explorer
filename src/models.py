@@ -1,4 +1,5 @@
 import re
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -20,3 +21,14 @@ class EthereumAddressModel(BaseModel):
         if not re.match(r"^0x[a-fA-F0-9]{40}$", v):
             raise ValueError("Invalid Ethereum contract address")
         return v
+
+
+class ContractInfoResponse(BaseModel):
+    """
+    Model to represent the information returned for a contract search.
+    """
+
+    contract_address: str
+    deployer: Optional[str]
+    other_deployments: List[str]
+    top_interactors: Dict[str, int]
